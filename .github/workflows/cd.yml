@@ -55,4 +55,4 @@ jobs:
             sudo docker pull ${{ secrets.DOCKER_USERNAME }}/webpage:${{ github.sha }}
             sudo docker stop webpage || true
             sudo docker rm webpage || true
-            sudo docker run -d --name webpage -p 80:80 ${{ secrets.DOCKER_USERNAME }}/webpage:${{ github.sha }}
+            sudo docker run -d --name webpage -p 80:5000 ${{ secrets.DOCKER_USERNAME }}/webpage:${{ github.sha }}
