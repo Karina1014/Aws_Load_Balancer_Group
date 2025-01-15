@@ -5,7 +5,7 @@ app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return F"Container ID: {socket.gethostname()}"
+    return F"Container ID : {socket.gethostname()}"
 
 
 
