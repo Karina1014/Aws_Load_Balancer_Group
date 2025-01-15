@@ -2,9 +2,9 @@ name: Build and Deploy Docker to EC2
 
 on:
   push:
-    branches: ["QA"]
-  pull_request:
     branches: ["main"]
+  pull_request:
+    branches: ["QA"]
 
 jobs:
   build-and-push:
