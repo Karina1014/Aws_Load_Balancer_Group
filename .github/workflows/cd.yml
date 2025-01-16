@@ -8,7 +8,7 @@ on:
 
 jobs:
   login-and-pull-qa:
-    if: github.ref == 'refs/heads/QA'
+    if: github.ref == 'refs/heads/QA' # Ejecuta solo para push en rama QA
     runs-on: ubuntu-latest
     steps:
       # Paso 1: Clonar el repositorio
@@ -31,7 +31,7 @@ jobs:
           tags: ${{ secrets.DOCKER_USERNAME }}/webpage:${{ github.sha }}
 
   pull-main:
-    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    if: github.event_name == 'pull_request' && github.base_ref == 'main' # Ejecuta solo en pull request hacia main
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -49,16 +49,16 @@ jobs:
           docker push ${{ secrets.DOCKER_USERNAME }}/webpage:prod-latest
 
   ssh-connect-ec2QA01:
-    needs: [login-and-pull-qa] # Asegurando que este trabajo dependa de login-and-pull-qa
-    if: github.ref == 'refs/heads/QA' # Se ejecuta solo cuando se hace push en la rama QA
+    needs: [login-and-pull-qa]  # Esto asegura que se ejecute después de login-and-pull-qa
+    if: github.ref == 'refs/heads/QA' # Asegúrate de que solo se ejecute en push a la rama QA
     runs-on: ubuntu-latest
     steps:
       - name: SSH into EC2 and pull the latest Docker image
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.EC2_HOST_QA01 }}
+          host: ${{ secrets.EC2_HOST_QA  }}
           username: ubuntu
-          key: ${{ secrets.EC2_KEY_QA }}
+          key: ${{ secrets.EC2_PRIVATE_KEY_QA }}
           script: |
             # Verificar si Docker está instalado
             if ! command -v docker &> /dev/null; then
