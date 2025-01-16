@@ -8,21 +8,18 @@ on:
 
 jobs:
   login-and-pull-qa:
-    if: github.ref == 'refs/heads/QA' # Ejecuta solo para push en rama QA
+    if: github.ref == 'refs/heads/QA'
     runs-on: ubuntu-latest
     steps:
-      # Paso 1: Clonar el repositorio
       - name: Checkout code
         uses: actions/checkout@v2
 
-      # Paso 2: Iniciar sesión en Docker Hub
       - name: Login to Docker Hub
         uses: docker/login-action@v1
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # Paso 3: Construir y empujar la imagen a Docker Hub
       - name: Build and Push Docker image
         uses: docker/build-push-action@v2
         with:
@@ -30,58 +27,42 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/webpage:${{ github.sha }}
 
-  pull-main:
-    if: github.event_name == 'pull_request' && github.base_ref == 'Production' # Ejecuta solo en pull request hacia la rama Production
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Build and push Docker image to Production
-        run: |
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/webpage:${{ github.sha }} .
-          docker push ${{ secrets.DOCKER_USERNAME }}/webpage:${{ github.sha }}
-
   ssh-connect-ec2QA01:
-    needs: [login-and-pull-qa]  # Esto asegura que se ejecute después de login-and-pull-qa
-    if: github.ref == 'refs/heads/QA' # Asegúrate de que solo se ejecute en push a la rama QA
+    needs: [login-and-pull-qa]
+    if: github.ref == 'refs/heads/QA'
     runs-on: ubuntu-latest
     steps:
-      - name: SSH into EC2 and pull the latest Docker image
+      - name: SSH into EC2 and deploy
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.EC2_HOST_QA }}
           username: ubuntu
           key: ${{ secrets.EC2_PRIVATE_KEY_QA }}
           script: |
-            # Verificar si Docker está instalado
+            # Instalar y configurar Docker si no está disponible
             if ! command -v docker &> /dev/null; then
               sudo apt update
               sudo apt install docker.io -y
               sudo systemctl start docker
               sudo systemctl enable docker
               sudo usermod -aG docker $USER
-              sudo systemctl restart docker
-            else
-              echo "Docker is already installed"
+              newgrp docker
             fi
 
-            # Asegurarse de que Docker esté corriendo
+            # Asegurarse de que Docker está activo
             if ! sudo systemctl is-active --quiet docker; then
               sudo systemctl start docker
             fi
 
-            # Descargar la última imagen desde Docker Hub
+            # Descargar la nueva imagen
             sudo docker pull ${{ secrets.DOCKER_USERNAME }}/webpage:${{ github.sha }}
 
-            # Detener cualquier contenedor en ejecución (si existe)
-            sudo docker stop $(docker ps -q --filter "name=webpage") || true
+            # Detener y eliminar el contenedor en ejecución
+            CONTAINER_ID=$(sudo docker ps -q --filter "name=webpage")
+            if [ -n "$CONTAINER_ID" ]; then
+              sudo docker stop $CONTAINER_ID
+              sudo docker rm $CONTAINER_ID
+            fi
 
-            # Ejecutar el contenedor con la nueva imagen
-            sudo docker run -d -p 5000:5000 ${{ secrets.DOCKER_USERNAME }}/webpage:${{ github.sha }}
+            # Ejecutar el nuevo contenedor
+            sudo docker run -d -p 5000:5000 --name webpage ${{ secrets.DOCKER_USERNAME }}/webpage:${{ github.sha }}
