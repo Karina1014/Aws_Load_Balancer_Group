@@ -1,10 +1,11 @@
+solo quiero de QA a Producction
 name: EC2 deploy from docker
 
 on:
   push:
-    branches: ["QA"]  # Ejecutar solo en push a la rama QA
+    branches: ["QA"]
   pull_request:
-    branches: ["Production"]  # Ejecutar solo en pull request hacia la rama Production
+    branches: ["Production"]
 
 jobs:
   login-and-pull-qa:
@@ -49,7 +50,7 @@ jobs:
           docker push ${{ secrets.DOCKER_USERNAME }}/webpage:${{ github.sha }}
 
   ssh-connect-ec2QA01:
-    needs: [login-and-pull-qa]  # Asegura que se ejecute después de login-and-pull-qa
+    needs: [login-and-pull-qa]  # Esto asegura que se ejecute después de login-and-pull-qa
     if: github.ref == 'refs/heads/QA' # Asegúrate de que solo se ejecute en push a la rama QA
     runs-on: ubuntu-latest
     steps:
