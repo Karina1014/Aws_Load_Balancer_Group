@@ -13,5 +13,5 @@ RUN pip install -r requirements.txt
 # Expone el puerto 8080
 EXPOSE 5000
 
-# Configura el contenedor para usar Gunicorn y escucha en el puerto 8080
+# Configura el contenedor para usar Gunicorn y escuca en el puerto 8080
 CMD ["gunicorn", "--bind", "0.0.0.0:5000", "main:app"]
