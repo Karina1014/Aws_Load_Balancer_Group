@@ -30,19 +30,46 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/webpage:${{ github.sha }}
 
-  deploy-to-ec2:
+  deploy-to-prod:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     needs: [build-and-push]
 
     steps:
-      # Paso 4: Conectar a la instancia EC2 y actualizar el contenedor
-      - name: SSH into EC2 and pull the latest Docker image
+      # Paso 4: Conectar a la instancia EC2 y actualizar el contenedor (Producción)
+      - name: SSH into EC2 (Production) and pull the latest Docker image
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.EC2_HOST }}
+          host: ${{ secrets.EC2_HOST_PROD }}
           username: ubuntu
           key: ${{ secrets.EC2_PRIVATE_KEY }}
+          script: |
+            if ! command -v docker &> /dev/null; then
+              sudo apt update
+              sudo apt install -y docker.io
+              sudo systemctl start docker
+              sudo systemctl enable docker
+            fi
+            
+            sudo docker login -u "${{ secrets.DOCKER_USERNAME }}" -p "${{ secrets.DOCKER_PASSWORD }}"
+            sudo docker pull ${{ secrets.DOCKER_USERNAME }}/webpage:${{ github.sha }}
+            sudo docker stop webpage || true
+            sudo docker rm webpage || true
+            sudo docker run -d --name webpage -p 80:5000 ${{ secrets.DOCKER_USERNAME }}/webpage:${{ github.sha }}
+
+  deploy-to-qa:
+    if: github.event_name == 'pull_request' && github.base_ref == 'QA'
+    runs-on: ubuntu-latest
+    needs: [build-and-push]
+
+    steps:
+      # Paso 5: Conectar a la instancia EC2 y actualizar el contenedor (QA)
+      - name: SSH into EC2 (QA) and pull the latest Docker image
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST_QA }}
+          username: ubuntu
+          key: ${{ secrets.EC2_PRIVATE_KEY_QA }}
           script: |
             if ! command -v docker &> /dev/null; then
               sudo apt update
