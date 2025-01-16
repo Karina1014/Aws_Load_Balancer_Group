@@ -1,10 +1,10 @@
-name: EC2 deploy from Docker
+name: EC2 deploy from docker
 
 on:
   push:
-    branches: ["QA"]  # Ejecuta cuando haya un push en la rama QA
+    branches: ["QA"]
   pull_request:
-    branches: ["Production"]  # Ejecuta cuando se cree un pull request hacia la rama Production
+    branches: ["Production"]
 
 jobs:
   login-and-pull-qa:
@@ -23,15 +23,15 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       # Paso 3: Construir y empujar la imagen a Docker Hub
-      - name: Build and Push Docker image to QA
+      - name: Build and Push Docker image
         uses: docker/build-push-action@v2
         with:
           context: .
           push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/webpage:qa-${{ github.sha }}
+          tags: ${{ secrets.DOCKER_USERNAME }}/webpage:${{ github.sha }}
 
-  deploy-to-production:
-    if: github.event_name == 'pull_request' && github.base_ref == 'Production' # Ejecuta solo en pull request hacia Production
+  pull-main:
+    if: github.event_name == 'pull_request' && github.base_ref == 'Production' # Ejecuta solo en pull request hacia la rama Production
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -45,15 +45,15 @@ jobs:
 
       - name: Build and push Docker image to Production
         run: |
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/webpage:prod-latest .
-          docker push ${{ secrets.DOCKER_USERNAME }}/webpage:prod-latest
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/webpage:${{ github.sha }} .
+          docker push ${{ secrets.DOCKER_USERNAME }}/webpage:${{ github.sha }}
 
   ssh-connect-ec2QA01:
-    needs: [login-and-pull-qa]  # Asegura que este paso se ejecute después de login-and-pull-qa
-    if: github.ref == 'refs/heads/QA' # Ejecuta solo en push a la rama QA
+    needs: [login-and-pull-qa]  # Esto asegura que se ejecute después de login-and-pull-qa
+    if: github.ref == 'refs/heads/QA' # Asegúrate de que solo se ejecute en push a la rama QA
     runs-on: ubuntu-latest
     steps:
-      - name: SSH into EC2 and pull the latest Docker image for QA
+      - name: SSH into EC2 and pull the latest Docker image
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.EC2_HOST_QA }}
@@ -71,18 +71,17 @@ jobs:
             else
               echo "Docker is already installed"
             fi
-            
+
             # Asegurarse de que Docker esté corriendo
             if ! sudo systemctl is-active --quiet docker; then
               sudo systemctl start docker
             fi
 
             # Descargar la última imagen desde Docker Hub
-            sudo docker pull ${{ secrets.DOCKER_USERNAME }}/webpage:qa-${{ github.sha }}
+            sudo docker pull ${{ secrets.DOCKER_USERNAME }}/webpage:${{ github.sha }}
 
             # Detener cualquier contenedor en ejecución (si existe)
-            sudo docker stop $(docker ps -q) || true
+            sudo docker stop $(docker ps -q --filter "name=webpage") || true
 
             # Ejecutar el contenedor con la nueva imagen
-            sudo docker run -d -p 5000:5000 ${{ secrets.DOCKER_USERNAME }}/webpage:qa-${{ github.sha }}
-
+            sudo docker run -d -p 5000:5000 ${{ secrets.DOCKER_USERNAME }}/webpage:${{ github.sha }}
