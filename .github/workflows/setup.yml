@@ -1,0 +1,66 @@
+name: Setup Docker and Deploy
+
+on:
+  workflow_call:
+    inputs:
+      ec2_host:
+        required: true
+        type: string
+      ec2_key:
+        required: true
+        type: string
+      docker_username:
+        required: true
+        type: string
+      repository_name:
+        required: true
+        type: string
+
+jobs:
+  connect_update:
+    runs-on: ubuntu-latest
+    steps:
+      # Paso 1: Instalar Docker si no está presente
+      - name: Install Docker if not installed
+        run: |
+          if ! command -v docker &> /dev/null; then
+            echo "Docker not found. Installing..."
+            sudo apt update
+            sudo apt install -y docker.io
+            sudo systemctl start docker
+            sudo systemctl enable docker
+            sudo usermod -aG docker $USER
+            sudo systemctl restart docker
+          else
+            echo "Docker is already installed"
+          fi
+
+      # Paso 2: Asegurarse de que Docker esté en funcionamiento
+      - name: Ensure Docker is running
+        run: |
+          if ! sudo systemctl is-active --quiet docker; then
+            echo "Docker is not running. Starting Docker..."
+            sudo systemctl start docker
+          else
+            echo "Docker is already running"
+          fi
+
+      # Paso 3: Conexión SSH a EC2 y actualización del contenedor Docker
+      - name: SSH into EC2 and pull the latest Docker image
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ inputs.ec2_host }}
+          username: ubuntu
+          key: ${{ inputs.ec2_key }}
+          script: |
+            echo "Pulling latest Docker image from Docker Hub..."
+            docker pull ${{ inputs.docker_username }}/${{ inputs.repository_name }}:latest
+
+            # Parar y eliminar los contenedores actuales
+            echo "Stopping and removing existing containers..."
+            docker stop $(docker ps -q) || true
+            docker rm $(docker ps -a -q) || true
+
+            # Ejecutar el contenedor Docker con la nueva imagen
+            echo "Running new Docker container..."
+            docker run -d -p 5000:5000 ${{ inputs.docker_username }}/${{ inputs.repository_name }}:latest
