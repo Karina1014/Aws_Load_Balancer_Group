@@ -49,20 +49,21 @@ jobs:
           docker push ${{ secrets.DOCKER_USERNAME }}/webpage:prod-latest
 
   ssh-connect-ec2QA01:
-    if: github.ref == 'refs/heads/QA'
+    needs: [login-and-pull-qa] # Asegurando que este trabajo dependa de login-and-pull-qa
+    if: github.ref == 'refs/heads/QA' # Se ejecuta solo cuando se hace push en la rama QA
     runs-on: ubuntu-latest
-    needs: [login-and-pull-qa]
     steps:
       - name: SSH into EC2 and pull the latest Docker image
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.EC2_HOST_QA }}
+          host: ${{ secrets.EC2_HOST_QA01 }}
           username: ubuntu
-          key: ${{ secrets.EC2_PRIVATE_KEY_QA }}
+          key: ${{ secrets.EC2_KEY_QA }}
           script: |
+            # Verificar si Docker está instalado
             if ! command -v docker &> /dev/null; then
               sudo apt update
-              sudo apt install docker.io
+              sudo apt install docker.io -y
               sudo systemctl start docker
               sudo systemctl enable docker
               sudo usermod -aG docker $USER
@@ -71,10 +72,16 @@ jobs:
               echo "Docker is already installed"
             fi
             
+            # Asegurarse de que Docker esté corriendo
             if ! sudo systemctl is-active --quiet docker; then
               sudo systemctl start docker
             fi
 
+            # Descargar la última imagen desde Docker Hub
             sudo docker pull ${{ secrets.DOCKER_USERNAME }}/qa:latest
+
+            # Detener cualquier contenedor en ejecución (si existe)
             sudo docker stop $(docker ps -q) || true
+
+            # Ejecutar el contenedor con la nueva imagen
             sudo docker run -d -p 5000:5000 ${{ secrets.DOCKER_USERNAME }}/qa:latest
