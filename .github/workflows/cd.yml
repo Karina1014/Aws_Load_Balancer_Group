@@ -1,10 +1,10 @@
-name: EC2 deploy from docker
+name: EC2 deploy from Docker
 
 on:
   push:
-    branches: ["QA"]
+    branches: ["QA"]  # Ejecuta cuando haya un push en la rama QA
   pull_request:
-    branches: ["Production"]
+    branches: ["Production"]  # Ejecuta cuando se cree un pull request hacia la rama Production
 
 jobs:
   login-and-pull-qa:
@@ -23,15 +23,15 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       # Paso 3: Construir y empujar la imagen a Docker Hub
-      - name: Build and Push Docker image
+      - name: Build and Push Docker image to QA
         uses: docker/build-push-action@v2
         with:
           context: .
           push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/webpage:${{ github.sha }}
+          tags: ${{ secrets.DOCKER_USERNAME }}/webpage:qa-${{ github.sha }}
 
-  pull-main:
-    if: github.event_name == 'pull_request' && github.base_ref == 'main' # Ejecuta solo en pull request hacia main
+  deploy-to-production:
+    if: github.event_name == 'pull_request' && github.base_ref == 'Production' # Ejecuta solo en pull request hacia Production
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -49,14 +49,14 @@ jobs:
           docker push ${{ secrets.DOCKER_USERNAME }}/webpage:prod-latest
 
   ssh-connect-ec2QA01:
-    needs: [login-and-pull-qa]  # Esto asegura que se ejecute después de login-and-pull-qa
-    if: github.ref == 'refs/heads/QA' # Asegúrate de que solo se ejecute en push a la rama QA
+    needs: [login-and-pull-qa]  # Asegura que este paso se ejecute después de login-and-pull-qa
+    if: github.ref == 'refs/heads/QA' # Ejecuta solo en push a la rama QA
     runs-on: ubuntu-latest
     steps:
-      - name: SSH into EC2 and pull the latest Docker image
+      - name: SSH into EC2 and pull the latest Docker image for QA
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.EC2_HOST_QA  }}
+          host: ${{ secrets.EC2_HOST_QA }}
           username: ubuntu
           key: ${{ secrets.EC2_PRIVATE_KEY_QA }}
           script: |
@@ -78,10 +78,11 @@ jobs:
             fi
 
             # Descargar la última imagen desde Docker Hub
-            sudo docker pull ${{ secrets.DOCKER_USERNAME }}/qa:latest
+            sudo docker pull ${{ secrets.DOCKER_USERNAME }}/webpage:qa-${{ github.sha }}
 
             # Detener cualquier contenedor en ejecución (si existe)
             sudo docker stop $(docker ps -q) || true
 
             # Ejecutar el contenedor con la nueva imagen
-            sudo docker run -d -p 5000:5000 ${{ secrets.DOCKER_USERNAME }}/qa:latest
+            sudo docker run -d -p 5000:5000 ${{ secrets.DOCKER_USERNAME }}/webpage:qa-${{ github.sha }}
+
