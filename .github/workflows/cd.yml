@@ -4,7 +4,7 @@ on:
   push:
     branches: ["QA"]
   pull_request:
-    branches: ["main"]
+    branches: ["Production"]
 
 jobs:
   login-and-pull-qa:
