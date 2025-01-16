@@ -48,11 +48,33 @@ jobs:
           docker build -t ${{ secrets.DOCKER_USERNAME }}/webpage:prod-latest .
           docker push ${{ secrets.DOCKER_USERNAME }}/webpage:prod-latest
 
-  ssh-connect-ec2-QA01:
+  ssh-connect-ec2QA01:
+    if: github.ref == 'refs/heads/QA'
+    runs-on: ubuntu-latest
     needs: [login-and-pull-qa]
-    uses: ./.github/workflows/setup.yml
-    with:
-      ec2_host: ${{ secrets.EC2_HOST_QA }}
-      ec2_key: ${{ secrets.EC2_PRIVATE_KEY_QA }}
-      docker_username: ${{ secrets.DOCKER_USERNAME }}
-      repository_name: ${{ secrets.DOCKER_REPOSITORY_NAME_QA }}
+    steps:
+      - name: SSH into EC2 and pull the latest Docker image
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST_QA }}
+          username: ubuntu
+          key: ${{ secrets.EC2_PRIVATE_KEY_QA }}
+          script: |
+            if ! command -v docker &> /dev/null; then
+              sudo apt update
+              sudo apt install docker.io
+              sudo systemctl start docker
+              sudo systemctl enable docker
+              sudo usermod -aG docker $USER
+              sudo systemctl restart docker
+            else
+              echo "Docker is already installed"
+            fi
+            
+            if ! sudo systemctl is-active --quiet docker; then
+              sudo systemctl start docker
+            fi
+
+            sudo docker pull ${{ secrets.DOCKER_USERNAME }}/qa:latest
+            sudo docker stop $(docker ps -q) || true
+            sudo docker run -d -p 5000:5000 ${{ secrets.DOCKER_USERNAME }}/qa:latest
